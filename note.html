@@ -1,0 +1,239 @@
+<template>
+    <lightning-card title="Notes" icon-name="standard:note">
+        <div slot="actions">
+            <lightning-button label="New Note" onclick={handleNewNote} variant="brand"></lightning-button>
+        </div>
+        
+        <!-- Note Form Modal -->
+        <template if:true={showNewNoteForm}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <h2 class="slds-text-heading_medium">{formTitle}</h2>
+                        <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCancel}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </header>
+                    
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <lightning-input 
+                            label="Title" 
+                            data-field="title" 
+                            value={newNote.title} 
+                            onchange={handleInputChange}
+                            required>
+                        </lightning-input>
+                        
+                        <lightning-combobox 
+                            label="Category" 
+                            data-field="category" 
+                            value={newNote.category} 
+                            options={categoryOptions} 
+                            onchange={handleInputChange}
+                            required>
+                        </lightning-combobox>
+                        
+                        <lightning-input-rich-text 
+                            label="Note Content" 
+                            value={newNote.body} 
+                            onchange={handleRichTextChange}
+                            formats="font,size,bold,italic,underline,strike,list,indent,align,link,image,clean,table,header,code"
+                            required>
+                        </lightning-input-rich-text>
+                        
+                        <!-- Link to Records Section -->
+                        <div class="slds-m-top_medium">
+                            <h3 class="slds-text-heading_small">Link to Records</h3>
+                            
+                            <div class="slds-grid slds-gutters slds-m-top_small">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox 
+                                        label="Related Object" 
+                                        data-field="relatedObject" 
+                                        options={availableObjects} 
+                                        placeholder="Select related object">
+                                    </lightning-combobox>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input 
+                                        label="Search Records" 
+                                        value={searchTerm} 
+                                        onchange={handleSearchTermChange} 
+                                        placeholder="Type to search...">
+                                    </lightning-input>
+                                </div>
+                            </div>
+                            
+                            <!-- Search Results -->
+                            <template if:true={hasSearchResults}>
+                                <div class="slds-dropdown slds-dropdown_fluid slds-is-open slds-m-top_x-small">
+                                    <ul class="slds-dropdown__list" role="listbox">
+                                        <template for:each={searchResults} for:item="record">
+                                            <li key={record.Id} class="slds-dropdown__item" role="option">
+                                                <lightning-button 
+                                                    variant="base" 
+                                                    label={record.Name} 
+                                                    title={record.Name}
+                                                    data-record-name={record.Name}
+                                                    data-object-type={record.RelatedObject}
+                                                    onclick={handleAddRecord}
+                                                    class="slds-truncate">
+                                                </lightning-button>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                            
+                            <!-- Linked Records Display -->
+                            <template if:true={hasLinkedRecords}>
+                                <div class="slds-m-top_small">
+                                    <h4 class="slds-text-body_small slds-text-color_weak">Linked Records:</h4>
+                                    <template for:each={newNote.linkedRecords} for:item="record">
+                                        <lightning-pill 
+                                            key={record.Id} 
+                                            label={record.Name} 
+                                            name={record.Id} 
+                                            onremove={handleRemoveRecord}
+                                            data-record-id={record.Id}
+                                            class="slds-m-right_x-small slds-m-top_x-small">
+                                        </lightning-pill>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <footer class="slds-modal__footer">
+                        <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+                        <lightning-button label="Save" onclick={handleSave} variant="brand"></lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        
+        <!-- Reply Form Modal -->
+        <template if:true={showReplyForm}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <h2 class="slds-text-heading_medium">Reply to Note</h2>
+                        <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCancel}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </header>
+                    
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <lightning-input 
+                            label="Reply Title" 
+                            data-field="title" 
+                            value={newNote.title} 
+                            onchange={handleInputChange}
+                            required
+                            field-level-help="Pre-filled from original note. You can edit if needed.">
+                        </lightning-input>
+                        
+                        <lightning-combobox 
+                            label="Category" 
+                            data-field="category" 
+                            value={newNote.category} 
+                            options={categoryOptions} 
+                            onchange={handleInputChange}
+                            required
+                            field-level-help="Pre-filled from original note. You can change if needed.">
+                        </lightning-combobox>
+                        
+                        <lightning-input-rich-text 
+                            label="Reply Content" 
+                            value={newNote.body} 
+                            onchange={handleRichTextChange}
+                            formats="font,size,bold,italic,underline,strike,list,indent,align,link,image,clean,table,header,code"
+                            required>
+                        </lightning-input-rich-text>
+                    </div>
+                    
+                    <footer class="slds-modal__footer">
+                        <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+                        <lightning-button label="Save Reply" onclick={handleSave} variant="brand"></lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        
+        <!-- Notes Display -->
+        <div class="slds-p-around_medium">
+            <template if:true={notes}>
+                <template for:each={notes} for:item="note">
+                    <article key={note.Id} class="slds-box slds-m-bottom_medium">
+                        <!-- Main Note -->
+                        <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                            <div class="slds-media__figure">
+                                <lightning-icon icon-name="standard:note" size="small"></lightning-icon>
+                            </div>
+                            <div class="slds-media__body">
+                                <h3 class="slds-text-heading_small">{note.Title__c}</h3>
+                                <p class="slds-text-body_small slds-text-color_weak">
+                                    {note.Category__c} • {note.CreatedBy.Name} • 
+                                    <lightning-formatted-date-time value={note.CreatedDate}></lightning-formatted-date-time>
+                                </p>
+                            </div>
+                            <div class="slds-media__figure slds-media__figure_reverse">
+                                <lightning-button-menu>
+                                    <lightning-menu-item label="Reply" onclick={handleReply} data-note-id={note.Id}></lightning-menu-item>
+                                    <lightning-menu-item label="Delete" onclick={handleDelete} data-note-id={note.Id}></lightning-menu-item>
+                                </lightning-button-menu>
+                            </div>
+                        </header>
+                        
+                        <div class="slds-m-top_small">
+                            <lightning-formatted-rich-text value={note.Body__c}></lightning-formatted-rich-text>
+                        </div>
+                        
+                        <!-- Thread Replies -->
+                        <template if:true={note.replies}>
+                            <template if:true={note.replies.length}>
+                                <div class="slds-m-top_medium slds-m-left_large">
+                                    <h4 class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+                                        Replies ({note.replies.length})
+                                    </h4>
+                                    
+                                    <template for:each={note.replies} for:item="reply">
+                                        <div key={reply.Id} class="slds-box slds-box_xx-small slds-m-bottom_small">
+                                            <header class="slds-media slds-media_center">
+                                                <div class="slds-media__figure">
+                                                    <lightning-icon icon-name="utility:reply" size="x-small"></lightning-icon>
+                                                </div>
+                                                <div class="slds-media__body">
+                                                    <h5 class="slds-text-body_small slds-text-color_default">{reply.Title__c}</h5>
+                                                    <p class="slds-text-body_small slds-text-color_weak">
+                                                        {reply.CreatedBy.Name} • 
+                                                        <lightning-formatted-date-time value={reply.CreatedDate}></lightning-formatted-date-time>
+                                                    </p>
+                                                </div>
+                                                <div class="slds-media__figure slds-media__figure_reverse">
+                                                    <lightning-button 
+                                                        icon-name="utility:delete" 
+                                                        variant="base" 
+                                                        size="small"
+                                                        onclick={handleDelete} 
+                                                        data-note-id={reply.Id}>
+                                                    </lightning-button>
+                                                </div>
+                                            </header>
+                                            
+                                            <div class="slds-m-top_x-small">
+                                                <lightning-formatted-rich-text value={reply.Body__c}></lightning-formatted-rich-text>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </template>
+                    </article>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>
