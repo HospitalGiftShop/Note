@@ -1,94 +1,35 @@
 public with sharing class NoteController {
     
-    @AuraEnabled
+    @AuraEnabled(cacheable=true)
     public static List<Note__c> getNotes(String recordId, String relatedObject) {
         try {
-            System.debug(LoggingLevel.INFO, 'getNotes called with recordId: ' + recordId + ', relatedObject: ' + relatedObject);
-            
             Set<Id> noteIds = new Set<Id>();
             
-            // Get note IDs linked to this record
-            List<Note_Relationship__c> relationships = [
-                SELECT Note__c 
-                FROM Note_Relationship__c 
-                WHERE Related_Record_Id__c = :recordId 
-                AND Related_Object__c = :relatedObject
-            ];
-            
-            System.debug('Found ' + relationships.size() + ' note relationships');
-            
-            for (Note_Relationship__c link : relationships) {
+            for (Note_Relationship__c link : [SELECT Note__c FROM Note_Relationship__c WHERE Related_Record_Id__c = :recordId AND Related_Object__c = :relatedObject]) {
                 noteIds.add(link.Note__c);
-                System.debug('Added note ID: ' + link.Note__c);
             }
             
             if (noteIds.isEmpty()) {
-                System.debug('No notes found for this record');
                 return new List<Note__c>();
             }
             
-            // Get all notes (parent notes and replies) - simplified query without child relationship
-            List<Note__c> allNotes = [
-                SELECT Id, Title__c, Category__c, Body__c, Parent_Note__c, 
-                       Is_Reply__c, Thread_Count__c, CreatedDate, CreatedBy.Name
-                FROM Note__c 
-                WHERE Id IN :noteIds OR Parent_Note__c IN :noteIds
-                ORDER BY CreatedDate DESC
-            ];
+            // Enhanced query to get related records info
+            List<Note__c> notes = [SELECT Id, Title__c, Category__c, Body__c, Parent_Note__c, Is_Reply__c, Thread_Count__c, CreatedDate, CreatedBy.Name,
+                                  (SELECT Id, Related_Record_Id__c, Related_Object__c FROM Note_Relationships__r)
+                                  FROM Note__c WHERE Id IN :noteIds OR Parent_Note__c IN :noteIds ORDER BY CreatedDate DESC];
             
-            System.debug('Found ' + allNotes.size() + ' total notes');
-            return allNotes;
+            return notes;
             
         } catch (Exception e) {
-            System.debug('Error in getNotes: ' + e.getMessage());
-            System.debug('Stack trace: ' + e.getStackTraceString());
             throw new AuraHandledException('Error retrieving notes: ' + e.getMessage());
         }
     }
     
     @AuraEnabled
-    public static Note__c saveNote(String title, String category, String body, 
-                                         String parentNoteId, List<String> linkedRecordIds, 
-                                         List<String> relatedObjects) {
+    public static Note__c saveNote(String title, String category, String body, String parentNoteId, List<String> linkedRecordIds, List<String> relatedObjects) {
         try {
-            System.debug(LoggingLevel.INFO, 'saveNote called with parameters:');
-            System.debug(LoggingLevel.INFO, '- title: ' + title);
-            System.debug(LoggingLevel.INFO, '- category: ' + category);
-            System.debug(LoggingLevel.INFO, '- body: ' + body);
-            System.debug(LoggingLevel.INFO, '- parentNoteId: ' + parentNoteId);
-            System.debug(LoggingLevel.INFO, '- linkedRecordIds: ' + linkedRecordIds);
-            System.debug(LoggingLevel.INFO, '- relatedObjects: ' + relatedObjects);
-            
-            // Input validation
-            if (String.isBlank(title)) {
-                throw new AuraHandledException('Title is required');
-            }
-            if (String.isBlank(category)) {
-                throw new AuraHandledException('Category is required');
-            }
-            if (String.isBlank(body)) {
-                throw new AuraHandledException('Body is required');
-            }
-            if (linkedRecordIds == null || linkedRecordIds.isEmpty()) {
-                throw new AuraHandledException('At least one linked record is required');
-            }
-            if (relatedObjects == null || relatedObjects.size() != linkedRecordIds.size()) {
-                throw new AuraHandledException('Related objects array must match linked records array');
-            }
-            
-            // Validate parentNoteId if provided
-            if (String.isNotBlank(parentNoteId)) {
-                if (parentNoteId.length() != 15 && parentNoteId.length() != 18) {
-                    throw new AuraHandledException('Invalid parent note ID format: ' + parentNoteId);
-                }
-            }
-            
-            // Validate linkedRecordIds
-            for (Integer i = 0; i < linkedRecordIds.size(); i++) {
-                String recordId = linkedRecordIds[i];
-                if (String.isBlank(recordId) || (recordId.length() != 15 && recordId.length() != 18)) {
-                    throw new AuraHandledException('Invalid record ID at index ' + i + ': ' + recordId);
-                }
+            if (String.isBlank(title) || String.isBlank(category) || String.isBlank(body)) {
+                throw new AuraHandledException('Title, category, and body are required');
             }
             
             Note__c note = new Note__c(
@@ -99,53 +40,77 @@ public with sharing class NoteController {
                 Is_Reply__c = String.isNotBlank(parentNoteId)
             );
             
-            System.debug(LoggingLevel.INFO, 'About to insert note: ' + note);
             insert note;
-            System.debug(LoggingLevel.INFO, 'Note inserted successfully with ID: ' + note.Id);
             
-            // Create links to records
             List<Note_Relationship__c> links = new List<Note_Relationship__c>();
             for (Integer i = 0; i < linkedRecordIds.size(); i++) {
-                Note_Relationship__c link = new Note_Relationship__c(
+                links.add(new Note_Relationship__c(
                     Note__c = note.Id,
                     Related_Record_Id__c = linkedRecordIds[i],
                     Related_Object__c = relatedObjects[i]
-                );
-                links.add(link);
-                System.debug(LoggingLevel.INFO, 'Created link: ' + link);
+                ));
             }
             
             if (!links.isEmpty()) {
-                System.debug(LoggingLevel.INFO, 'About to insert ' + links.size() + ' relationships');
                 insert links;
-                System.debug(LoggingLevel.INFO, 'Relationships inserted successfully');
             }
             
-            // Update thread count if this is a reply
             if (String.isNotBlank(parentNoteId)) {
                 updateThreadCount(parentNoteId);
             }
             
-            System.debug(LoggingLevel.INFO, 'saveNote completed successfully');
             return note;
+            
         } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'Error in saveNote: ' + e.getMessage());
-            System.debug(LoggingLevel.ERROR, 'Error type: ' + e.getTypeName());
-            System.debug(LoggingLevel.ERROR, 'Error stack trace: ' + e.getStackTraceString());
             throw new AuraHandledException('Error saving note: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled
+    public static Note__c updateNote(String noteId, String title, String category, String body, List<String> linkedRecordIds, List<String> relatedObjects) {
+        try {
+            if (String.isBlank(noteId) || String.isBlank(title) || String.isBlank(category) || String.isBlank(body)) {
+                throw new AuraHandledException('All fields are required');
+            }
+            
+            Note__c note = new Note__c(
+                Id = noteId,
+                Title__c = title,
+                Category__c = category,
+                Body__c = body
+            );
+            
+            update note;
+            
+            if (linkedRecordIds != null && !linkedRecordIds.isEmpty()) {
+                delete [SELECT Id FROM Note_Relationship__c WHERE Note__c = :noteId];
+                
+                List<Note_Relationship__c> links = new List<Note_Relationship__c>();
+                for (Integer i = 0; i < linkedRecordIds.size(); i++) {
+                    links.add(new Note_Relationship__c(
+                        Note__c = noteId,
+                        Related_Record_Id__c = linkedRecordIds[i],
+                        Related_Object__c = relatedObjects[i]
+                    ));
+                }
+                
+                if (!links.isEmpty()) {
+                    insert links;
+                }
+            }
+            
+            return note;
+            
+        } catch (Exception e) {
+            throw new AuraHandledException('Error updating note: ' + e.getMessage());
         }
     }
     
     @AuraEnabled
     public static void deleteNote(String noteId) {
         try {
-            // Delete note relationships
             delete [SELECT Id FROM Note_Relationship__c WHERE Note__c = :noteId];
-            
-            // Delete replies
             delete [SELECT Id FROM Note__c WHERE Parent_Note__c = :noteId];
-            
-            // Delete the note
             delete [SELECT Id FROM Note__c WHERE Id = :noteId];
         } catch (Exception e) {
             throw new AuraHandledException('Error deleting note: ' + e.getMessage());
@@ -153,11 +118,64 @@ public with sharing class NoteController {
     }
     
     @AuraEnabled(cacheable=true)
+    public static List<Map<String, String>> getLinkedRecords(String noteId) {
+        try {
+            List<Map<String, String>> linkedRecords = new List<Map<String, String>>();
+            
+            for (Note_Relationship__c link : [SELECT Related_Record_Id__c, Related_Object__c FROM Note_Relationship__c WHERE Note__c = :noteId]) {
+                String recordId = link.Related_Record_Id__c;
+                String objectType = link.Related_Object__c;
+                
+                try {
+                    String query = 'SELECT Id, Name FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
+                    List<SObject> records = Database.query(query);
+                    
+                    if (!records.isEmpty()) {
+                        linkedRecords.add(new Map<String, String>{
+                            'Id' => recordId,
+                            'Name' => (String) records[0].get('Name'),
+                            'RelatedObject' => objectType
+                        });
+                    }
+                } catch (Exception queryEx) {
+                    System.debug('Error querying record: ' + queryEx.getMessage());
+                }
+            }
+            
+            return linkedRecords;
+        } catch (Exception e) {
+            throw new AuraHandledException('Error getting linked records: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled(cacheable=true)
+    public static Map<String, String> getRecordName(String recordId, String objectType) {
+        try {
+            String query = 'SELECT Id, Name FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
+            List<SObject> records = Database.query(query);
+            
+            if (!records.isEmpty()) {
+                return new Map<String, String>{
+                    'Id' => recordId,
+                    'Name' => (String) records[0].get('Name'),
+                    'ObjectType' => objectType
+                };
+            }
+            
+            return new Map<String, String>{
+                'Id' => recordId,
+                'Name' => 'Record not found',
+                'ObjectType' => objectType
+            };
+        } catch (Exception e) {
+            throw new AuraHandledException('Error getting record name: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled(cacheable=true)
     public static List<Map<String, String>> searchRecords(String searchTerm, String relatedObject) {
         try {
-            String query = 'SELECT Id, Name FROM ' + relatedObject + 
-                          ' WHERE Name LIKE \'%' + String.escapeSingleQuotes(searchTerm) + '%\' LIMIT 10';
-            
+            String query = 'SELECT Id, Name FROM ' + relatedObject + ' WHERE Name LIKE \'%' + String.escapeSingleQuotes(searchTerm) + '%\' LIMIT 10';
             List<SObject> records = Database.query(query);
             List<Map<String, String>> results = new List<Map<String, String>>();
             
@@ -175,22 +193,30 @@ public with sharing class NoteController {
         }
     }
     
-    private static void updateThreadCount(String parentNoteId) {
-        Integer count = [SELECT COUNT() FROM Note__c WHERE Parent_Note__c = :parentNoteId];
-        update new Note__c(Id = parentNoteId, Thread_Count__c = count);
-    }
-    
     @AuraEnabled(cacheable=true)
     public static List<String> getCategoryPicklistValues() {
-        List<String> values = new List<String>();
-        Schema.DescribeFieldResult fieldResult = Note__c.Category__c.getDescribe();
-        
-        for (Schema.PicklistEntry entry : fieldResult.getPicklistValues()) {
-            if (entry.isActive()) {
-                values.add(entry.getLabel());
+        try {
+            List<String> values = new List<String>();
+            Schema.DescribeFieldResult fieldResult = Note__c.Category__c.getDescribe();
+            
+            for (Schema.PicklistEntry entry : fieldResult.getPicklistValues()) {
+                if (entry.isActive()) {
+                    values.add(entry.getLabel());
+                }
             }
+            
+            return values;
+        } catch (Exception e) {
+            throw new AuraHandledException('Error getting category values: ' + e.getMessage());
         }
-        
-        return values;
+    }
+    
+    private static void updateThreadCount(String parentNoteId) {
+        try {
+            Integer count = [SELECT COUNT() FROM Note__c WHERE Parent_Note__c = :parentNoteId];
+            update new Note__c(Id = parentNoteId, Thread_Count__c = count);
+        } catch (Exception e) {
+            System.debug('Error updating thread count: ' + e.getMessage());
+        }
     }
 }
