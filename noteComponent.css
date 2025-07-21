@@ -1,0 +1,201 @@
+/* Color Palette */
+:host {
+    --charcoal: #222222;
+    --slate: #3B3B3B;
+    --heather: #707479;
+    --cool-gray: #595A5A;
+    --soft-gray: #A9A8A9;
+    --mist: #DAD9D9;
+}
+
+/* FORCE CHARCOAL COLORS - Multiple selectors for normal state */
+.custom-brand-button .slds-button__label,
+.custom-edit-button .slds-button__label,
+.custom-reply-button .slds-button__label,
+.custom-delete-button .slds-button__label,
+.custom-brand-button button .slds-button__label,
+.custom-edit-button button .slds-button__label,
+.custom-reply-button button .slds-button__label,
+.custom-delete-button button .slds-button__label {
+    color: #222222 !important;
+    font-weight: 500 !important;
+}
+
+/* Multiple selectors for button text color */
+.custom-brand-button button,
+.custom-edit-button button,
+.custom-reply-button button,
+.custom-delete-button button,
+.custom-brand-button .slds-button,
+.custom-edit-button .slds-button,
+.custom-reply-button .slds-button,
+.custom-delete-button .slds-button {
+    color: #222222 !important;
+}
+
+/* Force charcoal colored icons with multiple selectors */
+.custom-brand-button lightning-primitive-icon,
+.custom-edit-button lightning-primitive-icon,
+.custom-reply-button lightning-primitive-icon,
+.custom-delete-button lightning-primitive-icon,
+.custom-brand-button svg,
+.custom-edit-button svg,
+.custom-reply-button svg,
+.custom-delete-button svg,
+.custom-brand-button lightning-icon,
+.custom-edit-button lightning-icon,
+.custom-reply-button lightning-icon,
+.custom-delete-button lightning-icon {
+    color: #222222 !important;
+    fill: #222222 !important;
+    --slds-c-icon-color-foreground: #222222 !important;
+    --slds-c-icon-color-foreground-default: #222222 !important;
+}
+
+/* Override Lightning's default green color specifically */
+.custom-brand-button,
+.custom-edit-button,
+.custom-reply-button,
+.custom-delete-button {
+    --slds-c-button-text-color: #222222 !important;
+    --slds-c-button-color-text: #222222 !important;
+    --slds-c-icon-color-foreground: #222222 !important;
+    --slds-c-button-text-color-hover: #707479 !important;
+    --slds-c-button-color-text-hover: #707479 !important;
+    --slds-c-icon-color-foreground-hover: #707479 !important;
+}
+
+/* Ultra-specific hover effects - heather color */
+:host .custom-brand-button:hover .slds-button__label,
+:host .custom-edit-button:hover .slds-button__label,
+:host .custom-reply-button:hover .slds-button__label,
+:host .custom-delete-button:hover .slds-button__label,
+:host .custom-brand-button:hover button .slds-button__label,
+:host .custom-edit-button:hover button .slds-button__label,
+:host .custom-reply-button:hover button .slds-button__label,
+:host .custom-delete-button:hover button .slds-button__label,
+.custom-brand-button:hover .slds-button__label,
+.custom-edit-button:hover .slds-button__label,
+.custom-reply-button:hover .slds-button__label,
+.custom-delete-button:hover .slds-button__label,
+.custom-brand-button:hover button .slds-button__label,
+.custom-edit-button:hover button .slds-button__label,
+.custom-reply-button:hover button .slds-button__label,
+.custom-delete-button:hover button .slds-button__label {
+    color: #707479 !important;
+}
+
+:host .custom-brand-button:hover lightning-primitive-icon,
+:host .custom-edit-button:hover lightning-primitive-icon,
+:host .custom-reply-button:hover lightning-primitive-icon,
+:host .custom-delete-button:hover lightning-primitive-icon,
+:host .custom-brand-button:hover svg,
+:host .custom-edit-button:hover svg,
+:host .custom-reply-button:hover svg,
+:host .custom-delete-button:hover svg,
+:host .custom-brand-button:hover lightning-icon,
+:host .custom-edit-button:hover lightning-icon,
+:host .custom-reply-button:hover lightning-icon,
+:host .custom-delete-button:hover lightning-icon,
+.custom-brand-button:hover lightning-primitive-icon,
+.custom-edit-button:hover lightning-primitive-icon,
+.custom-reply-button:hover lightning-primitive-icon,
+.custom-delete-button:hover lightning-primitive-icon,
+.custom-brand-button:hover svg,
+.custom-edit-button:hover svg,
+.custom-reply-button:hover svg,
+.custom-delete-button:hover svg,
+.custom-brand-button:hover lightning-icon,
+.custom-edit-button:hover lightning-icon,
+.custom-reply-button:hover lightning-icon,
+.custom-delete-button:hover lightning-icon {
+    color: #707479 !important;
+    fill: #707479 !important;
+    --slds-c-icon-color-foreground: #707479 !important;
+}
+
+/* Component styling */
+.custom-note-card {
+    background: white;
+    border: 1px solid var(--mist);
+    border-radius: 8px;
+}
+
+.custom-note-header {
+    background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%) !important;
+    border-bottom: 1px solid var(--mist);
+    color: #333333 !important;
+}
+
+.custom-note-content {
+    background: #fdfdfd;
+}
+
+.custom-related-record-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--slate) 0%, var(--charcoal) 100%);
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-decoration: none;
+    border: 1px solid var(--heather);
+    box-shadow: 0 2px 4px rgba(34, 34, 34, 0.1);
+}
+
+.custom-related-record-badge:hover {
+    background: linear-gradient(135deg, var(--heather) 0%, var(--slate) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(34, 34, 34, 0.15);
+    text-decoration: none;
+}
+
+.custom-reply-container {
+    background: #fafafa;
+    border: 1px solid var(--soft-gray);
+    border-left: 3px solid var(--heather) !important;
+    border-radius: 6px;
+}
+
+.custom-section-header {
+    color: var(--slate);
+    font-weight: 600;
+}
+
+.custom-metadata-text {
+    color: var(--cool-gray);
+}
+
+.custom-brand-button.custom-related-record-style button,
+.custom-brand-button.custom-related-record-style .slds-button {
+    background: linear-gradient(135deg, #3B3B3B 0%, #222222 100%) !important;
+    border: 1px solid #707479 !important;
+    border-radius: 20px !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    box-shadow: 0 2px 4px rgba(34, 34, 34, 0.1) !important;
+    transition: all 0.2s ease-in-out !important;
+    cursor: pointer !important;
+}
+
+.custom-brand-button.custom-related-record-style .slds-button__label {
+    color: #ffffff !important;
+    font-weight: 500 !important;
+}
+
+/* Hover effect for New Note button - matching Related Records */
+.custom-brand-button.custom-related-record-style:hover button,
+.custom-brand-button.custom-related-record-style:hover .slds-button {
+    background: linear-gradient(135deg, #707479 0%, #3B3B3B 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(34, 34, 34, 0.15) !important;
+}
+
+.custom-brand-button.custom-related-record-style:hover .slds-button__label {
+    color: #ffffff !important;
+}

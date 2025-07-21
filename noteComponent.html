@@ -1,0 +1,637 @@
+<template>
+    <lightning-card title="Notes" icon-name="standard:note">
+        <div slot="actions">
+            <lightning-button 
+                icon-name="utility:add"
+                label="New Note" 
+                onclick={handleNewNote} 
+                variant="base"
+                disabled={isLoading}
+                class="custom-brand-button">
+            </lightning-button>
+        </div>
+        
+        <!-- Loading Spinner -->
+        <template if:true={isLoading}>
+            <div class="slds-p-around_medium slds-text-align_center">
+                <lightning-spinner alternative-text="Loading notes..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+        
+        <!-- New Note Form Modal -->
+        <template if:true={showNewNoteForm}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <h2 class="slds-text-heading_medium">{formTitle}</h2>
+                        <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCancel}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </header>
+                    
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <div class="slds-form-element slds-m-bottom_medium">
+                            <lightning-input 
+                                label="Title" 
+                                data-field="title" 
+                                value={newNote.title} 
+                                onchange={handleInputChange}
+                                placeholder="Leave blank to use category as title">
+                            </lightning-input>
+                        </div>
+                        
+                        <div class="slds-form-element slds-m-bottom_medium">
+                            <lightning-combobox 
+                                label="Category" 
+                                data-field="category" 
+                                value={newNote.category} 
+                                options={categoryOptions} 
+                                onchange={handleInputChange}
+                                required>
+                            </lightning-combobox>
+                        </div>
+                    
+                        <div class="slds-form-element slds-m-bottom_medium">
+                            <lightning-input-rich-text 
+                                label="Note Content" 
+                                value={newNote.body} 
+                                onchange={handleRichTextChange}
+                                formats="font,size,bold,italic,underline,strike,list,indent,align,link,image,clean,table,header,code"
+                                required>
+                            </lightning-input-rich-text>
+                        </div>                    
+                        
+                        <!-- Link to Records Section -->
+                        <div class="slds-m-top_medium">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Link to Additional Records</h3>
+                            
+                            <div class="slds-grid slds-gutters slds-m-bottom_small">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox
+                                        label="Object Type"
+                                        data-field="relatedObject"
+                                        options={availableObjects}
+                                        onchange={handleRelatedObjectChange}>
+                                    </lightning-combobox>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input
+                                        label="Search Records"
+                                        data-field="searchTerm"
+                                        value={searchTerm}
+                                        onchange={handleSearchTermChange}
+                                        placeholder="Type to search...">
+                                    </lightning-input>
+                                </div>
+                            </div>
+                            
+                            <!-- Search Results -->
+                            <template if:true={hasSearchResults}>
+                                <div class="slds-m-bottom_small">
+                                    <h4 class="slds-text-body_small slds-m-bottom_x-small">Search Results:</h4>
+                                    <template for:each={searchResults} for:item="record">
+                                        <lightning-button
+                                            key={record.Id}
+                                            label={record.Name}
+                                            variant="neutral"
+                                            size="small"
+                                            class="slds-m-right_x-small slds-m-bottom_x-small"
+                                            onclick={handleAddRecord}
+                                            data-record-id={record.Id}
+                                            data-record-name={record.Name}
+                                            data-object-type={record.RelatedObject}>
+                                        </lightning-button>
+                                    </template>
+                                </div>
+                            </template>
+                            
+                            <!-- Linked Records (Editable pills in form) -->
+                            <template if:true={hasLinkedRecords}>
+                                <div>
+                                    <h4 class="slds-text-body_small slds-m-bottom_x-small">Linked Records:</h4>
+                                    <template for:each={newNote.linkedRecords} for:item="record">
+                                        <lightning-pill
+                                            key={record.Id}
+                                            label={record.Name}
+                                            name={record.Id}
+                                            onremove={handleRemoveRecord}
+                                            class="slds-m-right_x-small slds-m-bottom_x-small">
+                                        </lightning-pill>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <footer class="slds-modal__footer">
+                        <lightning-button 
+                            label="Cancel" 
+                            onclick={handleCancel}
+                            disabled={isLoading}>
+                        </lightning-button>
+                        <lightning-button 
+                            label="Save" 
+                            onclick={handleSave} 
+                            variant="brand"
+                            disabled={isLoading}>
+                        </lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        
+        <!-- Reply Form Modal -->
+        <template if:true={showReplyForm}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <h2 class="slds-text-heading_medium">Reply to Note</h2>
+                        <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCancel}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </header>
+                    
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <lightning-input-rich-text 
+                            label="Reply Content" 
+                            value={newNote.body} 
+                            onchange={handleRichTextChange}
+                            formats="font,size,bold,italic,underline,strike,list,indent,align,link,image,clean,table,header,code"
+                            required>
+                        </lightning-input-rich-text>
+                    </div>
+                    
+                    <footer class="slds-modal__footer">
+                        <lightning-button 
+                            label="Cancel" 
+                            onclick={handleCancel}
+                            disabled={isLoading}>
+                        </lightning-button>
+                        <lightning-button 
+                            label="Save Reply" 
+                            onclick={handleSave} 
+                            variant="brand"
+                            disabled={isLoading}>
+                        </lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        
+        <!-- Edit Form Modal -->
+        <template if:true={showEditForm}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <h2 class="slds-text-heading_medium">Edit Note</h2>
+                        <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCancel}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </header>
+                    
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <lightning-input 
+                            label="Title" 
+                            data-field="title" 
+                            value={editingNote.title} 
+                            onchange={handleEditInputChange}
+                            placeholder="Leave blank to use category as title">
+                        </lightning-input>
+                        
+                        <lightning-combobox 
+                            label="Category" 
+                            data-field="category" 
+                            value={editingNote.category} 
+                            options={categoryOptions} 
+                            onchange={handleEditInputChange}
+                            required>
+                        </lightning-combobox>
+                        
+                        <lightning-input-rich-text 
+                            label="Note Content" 
+                            value={editingNote.body} 
+                            onchange={handleEditRichTextChange}
+                            formats="font,size,bold,italic,underline,strike,list,indent,align,link,image,clean,table,header,code"
+                            required>
+                        </lightning-input-rich-text>
+                        
+                        <!-- Link to Records Section -->
+                        <div class="slds-m-top_medium">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Link to Additional Records</h3>
+                            
+                            <div class="slds-grid slds-gutters slds-m-bottom_small">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox
+                                        label="Object Type"
+                                        data-field="editRelatedObject"
+                                        options={availableObjects}
+                                        onchange={handleEditRelatedObjectChange}>
+                                    </lightning-combobox>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input
+                                        label="Search Records"
+                                        data-field="editSearchTerm"
+                                        value={searchTerm}
+                                        onchange={handleEditSearchTermChange}
+                                        placeholder="Type to search...">
+                                    </lightning-input>
+                                </div>
+                            </div>
+                            
+                            <!-- Search Results -->
+                            <template if:true={hasSearchResults}>
+                                <div class="slds-m-bottom_small">
+                                    <h4 class="slds-text-body_small slds-m-bottom_x-small">Search Results:</h4>
+                                    <template for:each={searchResults} for:item="record">
+                                        <lightning-button
+                                            key={record.Id}
+                                            label={record.Name}
+                                            variant="neutral"
+                                            size="small"
+                                            class="slds-m-right_x-small slds-m-bottom_x-small"
+                                            onclick={handleEditAddRecord}
+                                            data-record-id={record.Id}
+                                            data-record-name={record.Name}
+                                            data-object-type={record.RelatedObject}>
+                                        </lightning-button>
+                                    </template>
+                                </div>
+                            </template>
+                            
+                            <!-- Linked Records (Editable pills in edit form) -->
+                            <template if:true={hasEditLinkedRecords}>
+                                <div>
+                                    <h4 class="slds-text-body_small slds-m-bottom_x-small">Linked Records:</h4>
+                                    <template for:each={editingNote.linkedRecords} for:item="record">
+                                        <lightning-pill
+                                            key={record.Id}
+                                            label={record.Name}
+                                            name={record.Id}
+                                            onremove={handleEditRemoveRecord}
+                                            class="slds-m-right_x-small slds-m-bottom_x-small">
+                                        </lightning-pill>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <footer class="slds-modal__footer">
+                        <lightning-button 
+                            label="Cancel" 
+                            onclick={handleCancel}
+                            disabled={isLoading}>
+                        </lightning-button>
+                        <lightning-button 
+                            label="Update Note" 
+                            onclick={handleUpdateNote} 
+                            variant="brand"
+                            disabled={isLoading}>
+                        </lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+        
+        <!-- Notes Display -->
+        <div class="slds-p-around_medium">
+            <!-- Empty State -->
+            <template if:false={hasNotes}>
+                <template if:false={isLoading}>
+                    <div class="slds-text-align_center slds-p-around_large">
+                        <lightning-icon icon-name="standard:note" size="large" class="slds-m-bottom_small"></lightning-icon>
+                        <h3 class="slds-text-heading_small slds-m-bottom_small">No notes yet</h3>
+                        <p class="slds-text-body_regular slds-text-color_weak">Create your first note to get started.</p>
+                    </div>
+                </template>
+            </template>
+            
+            <!-- Notes Accordion with Custom Headers -->
+            <template if:true={hasNotes}>
+                <template for:each={notes} for:item="note">
+                    <div key={note.Id} class="slds-accordion slds-m-bottom_medium custom-note-card">
+                        <section class="slds-accordion__section slds-is-open">
+                            <!-- Custom Accordion Header -->
+                            <div class="slds-accordion__summary custom-note-header">
+                                <h2 class="slds-accordion__summary-heading">
+                                    <button 
+                                        class="slds-button slds-accordion__summary-action" 
+                                        onclick={handleToggleNote}
+                                        data-note-id={note.Id}
+                                        aria-expanded={note.isExpanded}>
+                                        <template if:true={note.isExpanded}>
+                                            <lightning-icon 
+                                                icon-name="utility:chevrondown" 
+                                                size="x-small" 
+                                                class="slds-accordion__summary-action-icon slds-button__icon_left">
+                                            </lightning-icon>
+                                        </template>
+                                        <template if:false={note.isExpanded}>
+                                            <lightning-icon 
+                                                icon-name="utility:chevronright" 
+                                                size="x-small" 
+                                                class="slds-accordion__summary-action-icon slds-button__icon_left">
+                                            </lightning-icon>
+                                        </template>
+                                        <span class="slds-accordion__summary-content" style="width: 100%;">
+                                            <!-- Custom Title and Date Layout -->
+                                            <div class="slds-grid slds-grid_align-spread" style="width: 100%;">
+                                                <div class="slds-col slds-truncate">
+                                                    <div class="slds-media slds-media_center">
+                                                        <div class="slds-media__figure">
+                                                            <lightning-icon icon-name="standard:note" size="small"></lightning-icon>
+                                                        </div>
+                                                        <div class="slds-media__body">
+                                                            <span class="slds-text-heading_small">{note.Title__c}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="slds-col slds-no-flex slds-text-align_right">
+                                                    <span class="slds-text-body_small slds-text-color_weak">{note.formattedDateTime}</span>
+                                                </div>
+                                            </div>
+                                        </span>
+                                    </button>
+                                </h2>
+                            </div>
+                            
+                            <!-- Accordion Content -->
+                            <template if:true={note.isExpanded}>
+                                <div class="slds-accordion__content slds-p-horizontal_medium slds-p-vertical_medium custom-note-content">
+                                    <!-- Note Body -->
+                                    <div class="slds-m-bottom_medium">
+                                        <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Body</h4>
+                                        <div class="slds-text-longform">
+                                            <lightning-formatted-rich-text value={note.Body__c}></lightning-formatted-rich-text>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Note Metadata Section -->
+                                    <div class="slds-grid slds-gutters slds-m-bottom_medium">
+                                        <div class="slds-col slds-size_1-of-2">
+                                            <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Category</h4>
+                                            <p class="slds-text-body_regular custom-metadata-text">{note.Category__c}</p>
+                                        </div>
+                                        <div class="slds-col slds-size_1-of-2">
+                                            <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Created By</h4>
+                                            <p class="slds-text-body_regular custom-metadata-text">{note.CreatedBy.Name}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Related Records Section -->
+                                    <template if:true={note.linkedRecords}>
+                                        <template if:true={note.linkedRecords.length}>
+                                            <div class="slds-m-bottom_medium">
+                                                <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Related Records:</h4>
+                                                <div>
+                                                    <template for:each={note.linkedRecords} for:item="linkedRecord">
+                                                        <span key={linkedRecord.Id} 
+                                                              class="custom-related-record-badge slds-m-right_x-small slds-m-bottom_x-small"
+                                                              onclick={handleNavigateToRecord}
+                                                              data-record-id={linkedRecord.Id}>
+                                                            {linkedRecord.Name}
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    
+                                    <!-- Shared With Section -->
+                                    <div class="slds-m-bottom_medium">
+                                        <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Shared With:</h4>
+                                        <p class="slds-text-body_regular custom-metadata-text">
+                                            <template if:true={note.relatedRecordsDisplay}>
+                                                {note.relatedRecordsDisplay}
+                                            </template>
+                                            <template if:false={note.relatedRecordsDisplay}>
+                                                Current record only
+                                            </template>
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Main Note Action Bar -->
+                                    <div class="slds-border_top slds-p-top_small slds-m-bottom_medium">
+                                        <div class="slds-grid slds-grid_align-spread">
+                                            <div class="slds-grid slds-gutters">
+                                                <div class="slds-col slds-no-flex">
+                                                    <lightning-button 
+                                                        icon-name="utility:edit" 
+                                                        label="Edit"
+                                                        variant="base"
+                                                        size="small"
+                                                        onclick={handleEdit} 
+                                                        data-note-id={note.Id}
+                                                        disabled={isLoading}
+                                                        class="custom-edit-button">
+                                                    </lightning-button>
+                                                </div>
+                                                
+                                                <div class="slds-col slds-no-flex">
+                                                    <lightning-button 
+                                                        icon-name="utility:comments" 
+                                                        label="Reply"
+                                                        variant="base"
+                                                        size="small"
+                                                        onclick={handleReply} 
+                                                        data-note-id={note.Id}
+                                                        disabled={isLoading}
+                                                        class="custom-reply-button">
+                                                    </lightning-button>
+                                                </div>
+                                                
+                                                <div class="slds-col slds-no-flex">
+                                                    <lightning-button 
+                                                        icon-name="utility:delete" 
+                                                        label="Delete"
+                                                        variant="base"
+                                                        size="small"
+                                                        onclick={handleDelete} 
+                                                        data-note-id={note.Id}
+                                                        disabled={isLoading}
+                                                        class="custom-delete-button">
+                                                    </lightning-button>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Reply Count -->
+                                            <div class="slds-col slds-no-flex">
+                                                <template if:true={note.replies.length}>
+                                                    <span class="slds-text-body_small slds-text-color_weak">
+                                                        {note.repliesButtonLabel}
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Replies Section -->
+                                    <template if:true={note.replies}>
+                                        <template if:true={note.replies.length}>
+                                            <div class="slds-m-top_medium">
+                                                <div class={note.repliesSectionClass}>
+                                                    <h3 class="slds-section__title">
+                                                        <button 
+                                                            class="slds-button slds-section__title-action" 
+                                                            onclick={handleToggleReplies}
+                                                            data-note-id={note.Id}
+                                                            aria-expanded={note.repliesExpanded}>
+                                                            <template if:false={note.repliesExpanded}>
+                                                                <lightning-icon 
+                                                                    icon-name="utility:chevronright" 
+                                                                    size="x-small" 
+                                                                    class="slds-section__title-action-icon slds-button__icon_left"
+                                                                    data-note-id={note.Id}>
+                                                                </lightning-icon>
+                                                            </template>
+                                                            <template if:true={note.repliesExpanded}>
+                                                                <lightning-icon 
+                                                                    icon-name="utility:chevrondown" 
+                                                                    size="x-small" 
+                                                                    class="slds-section__title-action-icon slds-button__icon_left"
+                                                                    data-note-id={note.Id}>
+                                                                </lightning-icon>
+                                                            </template>
+                                                            <span class="slds-text-body_small" data-note-id={note.Id}>
+                                                                Total Replies ({note.replies.length})
+                                                            </span>
+                                                        </button>
+                                                    </h3>
+                                                    <template if:true={note.repliesExpanded}>
+                                                        <div class="slds-section__content">
+                                                            <div class="slds-p-top_small">
+                                                                <template for:each={note.replies} for:item="reply">
+                                                                    <div key={reply.Id} class="slds-box slds-box_xx-small slds-m-bottom_medium slds-p-horizontal_x-large slds-p-vertical_medium custom-reply-container" style="margin-left: 5rem;">
+                                                                        <!-- Reply Header with Title and Date -->
+                                                                        <header class="slds-media slds-media_center slds-m-bottom_small">
+                                                                            <div class="slds-media__figure">
+                                                                                <lightning-icon icon-name="utility:reply" size="small"></lightning-icon>
+                                                                            </div>
+                                                                            <div class="slds-media__body">
+                                                                                <div class="slds-grid slds-grid_align-spread">
+                                                                                    <div class="slds-col">
+                                                                                        <h5 class="slds-text-heading_small slds-text-color_default">{reply.Title__c}</h5>
+                                                                                    </div>
+                                                                                    <div class="slds-col slds-no-flex">
+                                                                                        <p class="slds-text-body_small slds-text-color_weak">
+                                                                                            <lightning-formatted-date-time 
+                                                                                                value={reply.CreatedDate}
+                                                                                                year="numeric"
+                                                                                                month="short"
+                                                                                                day="2-digit"
+                                                                                                hour="2-digit"
+                                                                                                minute="2-digit"
+                                                                                                hour12="true">
+                                                                                            </lightning-formatted-date-time>
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </header>
+                                                                        
+                                                                        <div style="margin-left: 1rem;">
+                                                                            <!-- Reply Body -->
+                                                                            <div class="slds-m-bottom_medium">
+                                                                                <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Body</h4>
+                                                                                <div class="slds-text-longform">
+                                                                                    <lightning-formatted-rich-text value={reply.Body__c}></lightning-formatted-rich-text>
+                                                                                </div>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Reply Metadata Section -->
+                                                                            <div class="slds-grid slds-gutters slds-m-bottom_medium">
+                                                                                <div class="slds-col slds-size_1-of-2">
+                                                                                    <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Category</h4>
+                                                                                    <p class="slds-text-body_regular custom-metadata-text">{reply.Category__c}</p>
+                                                                                </div>
+                                                                                <div class="slds-col slds-size_1-of-2">
+                                                                                    <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Created By</h4>
+                                                                                    <p class="slds-text-body_regular custom-metadata-text">{reply.CreatedBy.Name}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Related Records Section for Replies -->
+                                                                            <template if:true={reply.linkedRecords}>
+                                                                                <template if:true={reply.linkedRecords.length}>
+                                                                                    <div class="slds-m-bottom_medium">
+                                                                                        <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Related Records:</h4>
+                                                                                        <div>
+                                                                                            <template for:each={reply.linkedRecords} for:item="linkedRecord">
+                                                                                                <span key={linkedRecord.Id} 
+                                                                                                      class="custom-related-record-badge slds-m-right_x-small slds-m-bottom_x-small"
+                                                                                                      onclick={handleNavigateToRecord}
+                                                                                                      data-record-id={linkedRecord.Id}>
+                                                                                                    {linkedRecord.Name}
+                                                                                                </span>
+                                                                                            </template>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </template>
+                                                                            </template>
+                                                                            
+                                                                            <!-- Shared With Section for Replies -->
+                                                                            <div class="slds-m-bottom_medium">
+                                                                                <h4 class="slds-text-body_small slds-m-bottom_x-small custom-section-header">Shared With:</h4>
+                                                                                <p class="slds-text-body_regular custom-metadata-text">
+                                                                                    <template if:true={reply.relatedRecordsDisplay}>
+                                                                                        {reply.relatedRecordsDisplay}
+                                                                                    </template>
+                                                                                    <template if:false={reply.relatedRecordsDisplay}>
+                                                                                        Current record only
+                                                                                    </template>
+                                                                                </p>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Reply Action Bar -->
+                                                                            <div class="slds-border_top slds-p-top_small">
+                                                                                <div class="slds-grid slds-gutters">
+                                                                                    <div class="slds-col slds-no-flex">
+                                                                                        <lightning-button 
+                                                                                            icon-name="utility:edit" 
+                                                                                            label="Edit"
+                                                                                            variant="base"
+                                                                                            size="small"
+                                                                                            onclick={handleEdit} 
+                                                                                            data-note-id={reply.Id}
+                                                                                            disabled={isLoading}
+                                                                                            class="custom-edit-button">
+                                                                                        </lightning-button>
+                                                                                    </div>
+                                                                                    
+                                                                                    <div class="slds-col slds-no-flex">
+                                                                                        <lightning-button 
+                                                                                            icon-name="utility:delete" 
+                                                                                            label="Delete"
+                                                                                            variant="base"
+                                                                                            size="small"
+                                                                                            onclick={handleDelete} 
+                                                                                            data-note-id={reply.Id}
+                                                                                            disabled={isLoading}
+                                                                                            class="custom-delete-button">
+                                                                                        </lightning-button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </template>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                </div>
+                            </template>
+                        </section>
+                    </div>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>
