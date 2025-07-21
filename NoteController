@@ -1,6 +1,6 @@
 public with sharing class NoteController {
     
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static List<Note__c> getNotes(String recordId, String relatedObject) {
         try {
             Set<Id> noteIds = new Set<Id>();
@@ -14,7 +14,7 @@ public with sharing class NoteController {
             }
             
             // Enhanced query to get related records info
-            List<Note__c> notes = [SELECT Id, Title__c, Category__c, Body__c, Parent_Note__c, Is_Reply__c, Thread_Count__c, CreatedDate, CreatedBy.Name,
+            List<Note__c> notes = [SELECT Id, Title__c, Category__c, Body__c, Parent_Note__c, ParentId__c, Object_Name__c, Is_Reply__c, Thread_Count__c, CreatedDate, CreatedBy.Name,
                                   (SELECT Id, Related_Record_Id__c, Related_Object__c FROM Note_Relationships__r)
                                   FROM Note__c WHERE Id IN :noteIds OR Parent_Note__c IN :noteIds ORDER BY CreatedDate DESC];
             
@@ -26,17 +26,22 @@ public with sharing class NoteController {
     }
     
     @AuraEnabled
-    public static Note__c saveNote(String title, String category, String body, String parentNoteId, List<String> linkedRecordIds, List<String> relatedObjects) {
+    public static Note__c saveNote(String title, String category, String body, String parentNoteId, String parentRecordId, String objectName, List<String> linkedRecordIds, List<String> relatedObjects) {
         try {
-            if (String.isBlank(title) || String.isBlank(category) || String.isBlank(body)) {
-                throw new AuraHandledException('Title, category, and body are required');
+            if (String.isBlank(category) || String.isBlank(body)) {
+                throw new AuraHandledException('Category and body are required');
             }
             
+            // If title is blank, use the category as the title
+            String finalTitle = String.isNotBlank(title) ? title : category;
+            
             Note__c note = new Note__c(
-                Title__c = title,
+                Title__c = finalTitle,
                 Category__c = category,
                 Body__c = body,
                 Parent_Note__c = String.isNotBlank(parentNoteId) ? parentNoteId : null,
+                ParentId__c = String.isNotBlank(parentRecordId) ? parentRecordId : null,
+                Object_Name__c = String.isNotBlank(objectName) ? objectName : null,
                 Is_Reply__c = String.isNotBlank(parentNoteId)
             );
             
@@ -67,17 +72,22 @@ public with sharing class NoteController {
     }
     
     @AuraEnabled
-    public static Note__c updateNote(String noteId, String title, String category, String body, List<String> linkedRecordIds, List<String> relatedObjects) {
+    public static Note__c updateNote(String noteId, String title, String category, String body, String parentRecordId, String objectName, List<String> linkedRecordIds, List<String> relatedObjects) {
         try {
-            if (String.isBlank(noteId) || String.isBlank(title) || String.isBlank(category) || String.isBlank(body)) {
-                throw new AuraHandledException('All fields are required');
+            if (String.isBlank(noteId) || String.isBlank(category) || String.isBlank(body)) {
+                throw new AuraHandledException('Note ID, category, and body are required');
             }
+            
+            // If title is blank, use the category as the title
+            String finalTitle = String.isNotBlank(title) ? title : category;
             
             Note__c note = new Note__c(
                 Id = noteId,
-                Title__c = title,
+                Title__c = finalTitle,
                 Category__c = category,
-                Body__c = body
+                Body__c = body,
+                ParentId__c = String.isNotBlank(parentRecordId) ? parentRecordId : null,
+                Object_Name__c = String.isNotBlank(objectName) ? objectName : null
             );
             
             update note;
@@ -117,7 +127,7 @@ public with sharing class NoteController {
         }
     }
     
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static List<Map<String, String>> getLinkedRecords(String noteId) {
         try {
             List<Map<String, String>> linkedRecords = new List<Map<String, String>>();
@@ -127,13 +137,14 @@ public with sharing class NoteController {
                 String objectType = link.Related_Object__c;
                 
                 try {
-                    String query = 'SELECT Id, Name FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
+                    String nameField = getNameFieldForObject(objectType);
+                    String query = 'SELECT Id, ' + nameField + ' FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
                     List<SObject> records = Database.query(query);
                     
                     if (!records.isEmpty()) {
                         linkedRecords.add(new Map<String, String>{
                             'Id' => recordId,
-                            'Name' => (String) records[0].get('Name'),
+                            'Name' => (String) records[0].get(nameField),
                             'RelatedObject' => objectType
                         });
                     }
@@ -148,16 +159,17 @@ public with sharing class NoteController {
         }
     }
     
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static Map<String, String> getRecordName(String recordId, String objectType) {
         try {
-            String query = 'SELECT Id, Name FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
+            String nameField = getNameFieldForObject(objectType);
+            String query = 'SELECT Id, ' + nameField + ' FROM ' + objectType + ' WHERE Id = \'' + recordId + '\' LIMIT 1';
             List<SObject> records = Database.query(query);
             
             if (!records.isEmpty()) {
                 return new Map<String, String>{
                     'Id' => recordId,
-                    'Name' => (String) records[0].get('Name'),
+                    'Name' => (String) records[0].get(nameField),
                     'ObjectType' => objectType
                 };
             }
@@ -172,17 +184,18 @@ public with sharing class NoteController {
         }
     }
     
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static List<Map<String, String>> searchRecords(String searchTerm, String relatedObject) {
         try {
-            String query = 'SELECT Id, Name FROM ' + relatedObject + ' WHERE Name LIKE \'%' + String.escapeSingleQuotes(searchTerm) + '%\' LIMIT 10';
+            String nameField = getNameFieldForObject(relatedObject);
+            String query = 'SELECT Id, ' + nameField + ' FROM ' + relatedObject + ' WHERE ' + nameField + ' LIKE \'%' + String.escapeSingleQuotes(searchTerm) + '%\' LIMIT 10';
             List<SObject> records = Database.query(query);
             List<Map<String, String>> results = new List<Map<String, String>>();
             
             for (SObject record : records) {
                 results.add(new Map<String, String>{
                     'Id' => (String) record.get('Id'),
-                    'Name' => (String) record.get('Name'),
+                    'Name' => (String) record.get(nameField),
                     'RelatedObject' => relatedObject
                 });
             }
@@ -209,6 +222,32 @@ public with sharing class NoteController {
         } catch (Exception e) {
             throw new AuraHandledException('Error getting category values: ' + e.getMessage());
         }
+    }
+    
+    // Helper method to get the correct name field for different objects
+    private static String getNameFieldForObject(String objectType) {
+        // Map of object types to their name fields
+        Map<String, String> objectToNameField = new Map<String, String>{
+            'Account' => 'Name',
+            'Contact' => 'Name',
+            'Opportunity' => 'Name',
+            'Lead' => 'Name',
+            'Case' => 'Subject',
+            'Task' => 'Subject',
+            'Event' => 'Subject',
+            'Campaign' => 'Name',
+            'Product2' => 'Name',
+            'Pricebook2' => 'Name',
+            'Contract' => 'ContractNumber',
+            'Order' => 'OrderNumber',
+            'Quote' => 'Name',
+            'Asset' => 'Name',
+            'Solution' => 'SolutionName',
+            'Article' => 'Title'
+        };
+        
+        // Return the appropriate field name, defaulting to 'Name' if not found
+        return objectToNameField.containsKey(objectType) ? objectToNameField.get(objectType) : 'Name';
     }
     
     private static void updateThreadCount(String parentNoteId) {
